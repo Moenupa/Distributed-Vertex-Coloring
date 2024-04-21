@@ -3,75 +3,53 @@
 
 using namespace std;
 
-class Graph
+void parse_stdin(vector<vector<int>>& mat, int size) {
+    for (int i = 0; i < size; i++)
+    {
+        for (int j = 0; j < size; j++)
+        {
+            cin >> mat[i][j];
+        }
+    }
+}
+
+void print_matrix(vector<vector<int>>& mat, int size) {
+    for (int i = 0; i < size; i++)
+    {
+        for (int j = 0; j < size; j++)
+        {
+            cout << mat[i][j] << " ";
+        }
+        cout << endl;
+    }
+}
+
+bool is_color_available(int u, int c, const vector<vector<int>> &mat, int s, int e)
 {
-    int N;
-    vector<vector<int>> mat;
-
-public:
-    Graph(int N) : N(N), mat(N, vector<int>(N, false)) {}
-
-    void parseStdin() {
-        for (int i = 0; i < N; i++) {
-            for (int j = 0; j < N; j++) {
-                cin >> mat[i][j];
-            }
-        }
-    }
-
-    void print() {
-        for (int i = 0; i < N; i++) {
-            for (int j = 0; j < N; j++) {
-                cout << mat[i][j] << " ";
-            }
-            cout << endl;
-        }
-    }
-
-    void addEdge(int u, int v)
+    for (int v = s; v < e; ++v)
     {
-        if (u == v)
+        if (mat[u][v] && mat[v][v] == c)
         {
-            return;
+            return false;
         }
-
-        mat[u][v] = true;
-        mat[v][u] = true;
     }
+    return true;
+}
 
-    void sequentialVertexColoring()
+void firstfit(vector<vector<int>> &mat, int s, int e)
+{
+    int len = e-s;
+
+    for (int u = s; u < e; ++u)
     {
-        vector<int> color(N, -1);
-
-        for (int u = 0; u < N; ++u)
+        for (int c = 0; c < len; ++c)
         {
-            for (int c = 0; c < N; ++c)
+            if (mat[u][u] == -1 && is_color_available(u, c, mat, s, e))
             {
-                if (color[u] == -1 && isColorAvailable(u, c, color))
-                {
-                    color[u] = c;
-                    break;
-                }
+                mat[u][u] = c;
+                break;
             }
         }
-
-        // Print the colors
-        for (int u = 0; u < N; ++u)
-        {
-            cout << "Vertex " << u << " is colored with " << color[u] << endl;
-        }
+        cout << "Vertex " << u << " is colored with " << mat[u][u] << endl;
     }
-
-private:
-    bool isColorAvailable(int u, int c, const vector<int> &color)
-    {
-        for (int v = 0; v < N; ++v)
-        {
-            if (mat[u][v] && color[v] == c)
-            {
-                return false;
-            }
-        }
-        return true;
-    }
-};
+}
