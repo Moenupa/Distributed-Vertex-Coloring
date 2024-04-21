@@ -19,7 +19,7 @@ int main() {
     parse_stdin(mat, size);
     print_matrix(mat, size);
 
-    sequential_coloring(mat, 0, size);
+    firstfit(mat, 0, size);
 
     auto end = high_resolution_clock::now();
     duration<double, milli> time = end - start;
