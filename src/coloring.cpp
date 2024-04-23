@@ -68,13 +68,12 @@ namespace D2Coloring
 	int detect_conflicts(edge_t *row, vertex_t *col, vertex_t n_vertex, int colormap[], bool heatmap[], int conflict_vid[])
 	{
 		unsigned int count = 0;
-		int c, vid, temp;
-		int i, j, k;
-#pragma omp parallel for private(j, k, c, vid, temp)
-		for (i = 0; i < n_vertex; i++)
+		#pragma omp parallel for
+		for (int i = 0; i < n_vertex; i++)
 		{
-			c = colormap[i];
-			for (j = row[i]; j < row[i + 1]; j++)
+			int c = colormap[i];
+			int vid, temp;
+			for (int j = row[i]; j < row[i + 1]; j++)
 			{
 				if (colormap[col[j]] == c)
 				{
@@ -82,13 +81,13 @@ namespace D2Coloring
 					if (!heatmap[vid])
 					{
 						heatmap[vid] = true;
-#pragma omp atomic capture
+						#pragma omp atomic capture
 						temp = count++;
 						conflict_vid[temp] = vid;
 					}
 				}
 
-				for (k = row[col[j]]; k < row[col[j] + 1]; ++k)
+				for (int k = row[col[j]]; k < row[col[j] + 1]; k++)
 				{
 					if (colormap[col[k]] == c && col[k] != i)
 					{
@@ -96,7 +95,7 @@ namespace D2Coloring
 						if (!heatmap[vid])
 						{
 							heatmap[vid] = true;
-#pragma omp atomic capture
+							#pragma omp atomic capture
 							temp = count++;
 							conflict_vid[temp] = vid;
 						}
@@ -105,7 +104,7 @@ namespace D2Coloring
 			}
 		}
 
-#pragma omp parallel for
+		#pragma omp parallel for
 		for (edge_t e = 0; e < count; e++)
 			heatmap[conflict_vid[e]] = false;
 
@@ -206,24 +205,21 @@ namespace D2Coloring
 		double t_start, t_end;
 		int n_merge_conflict = -1;
 
-		int confArrSize = n_vertex / 2 + 1;
-		int *conflictedVertices = new int[confArrSize]();
-		bool *isVertexDetected = new bool[n_vertex]();
+		int *conflicts = new int[n_vertex / 2 + 1]();
+		bool *heatmap = new bool[n_vertex]();
 		static bool *color_used;
-#pragma omp threadprivate(color_used)
+		#pragma omp threadprivate(color_used)
 
-#pragma omp parallel
+		#pragma omp parallel
 		{
 			color_used = new bool[n_vertex + 1]();
 		}
 
-		// first stage coloring
-		int i, c;
 		t_start = omp_get_wtime();
-#pragma omp parallel for private(c)
-		for (i = 0; i < n_vertex; i++)
+		#pragma omp parallel for
+		for (int i = 0; i < n_vertex; i++)
 		{
-			c = firstfit(i, row, col, n_vertex, colormap, color_used);
+			int c = firstfit(i, row, col, n_vertex, colormap, color_used);
 			colormap[i] = c;
 		}
 
@@ -231,21 +227,21 @@ namespace D2Coloring
 		do
 		{
 			// detect conflicted vertices and recolor
-			n_conflict = detect_conflicts(row, col, n_vertex, colormap, isVertexDetected, conflictedVertices);
-#pragma omp for private(c)
-			for (i = 0; i < n_conflict; i++)
+			n_conflict = detect_conflicts(row, col, n_vertex, colormap, heatmap, conflicts);
+			#pragma omp for
+			for (int i = 0; i < n_conflict; i++)
 			{
-				c = firstfit(conflictedVertices[i], row, col, n_vertex, colormap, color_used);
-				colormap[conflictedVertices[i]] = c;
+				int c = firstfit(conflicts[i], row, col, n_vertex, colormap, color_used);
+				colormap[conflicts[i]] = c;
 			}
 			++n_merge_conflict;
 		} while (n_conflict > 0);
 		t_end = omp_get_wtime();
 
 		// clean up
-		delete[] isVertexDetected;
-		delete[] conflictedVertices;
-#pragma omp parallel
+		delete[] heatmap;
+		delete[] conflicts;
+		#pragma omp parallel
 		{
 			delete[] color_used;
 		}
