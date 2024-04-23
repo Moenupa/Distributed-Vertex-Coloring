@@ -44,81 +44,72 @@ void print_report(int n_thread, report r, std::string note, int conflicts)
 		   conflicts);
 }
 
-inline int max(vertex_t len, int colors[])
+inline int max(vertex_t len, int colormap[])
 {
 	int val = -1;
 	for (int i = 0; i < len; i++)
-		if (colors[i] > val)
-			val = colors[i];
+		if (colormap[i] > val)
+			val = colormap[i];
 	return val + 1;
 }
 
 namespace D2Coloring
 {
-	/*
-	Distance-2 Graph coloring
-	Traverses entire graph to find conflicts (i.e. adjecent vertices with same color), returns the number of such
-	conflicts as return value, indices of these vertices are written into out array.
-
-	*row and *col: pointers define the starting point of the graph
-	n_vertex:		   number of vertices in the graph
-	colors:		   the array storing color values assigned to each vertex (-1 means unassigned)
-	isDetected:    the array that will be used as temporal storage to find whether the vertex is already marked as
-	conflict, initially all values assumed to be false (taken as parameter because of efficiency considerations)
-	out:		   output array that contains all the vertices marked to be re-colored (size >= n_vertex/2)
-
-	returns:       number of conflicts detected.
+	/**
+	 * @brief Find number of conflicts in the graph
+	 * 
+	 * @param row: row pointer
+	 * @param col: column pointer
+	 * @param n_vertex: number of vertices
+	 * @param colormap: color array shaped (n_vertex, )
+	 * @param heatmap: map to track detected conflicts
+	 * @param conflict_vid: output array to store conflicted vertices
 	*/
-	int detect_conflicts(edge_t *row, vertex_t *col, vertex_t n_vertex, int colors[], bool isDetected[], int out[])
+	int detect_conflicts(edge_t *row, vertex_t *col, vertex_t n_vertex, int colormap[], bool heatmap[], int conflict_vid[])
 	{
-		unsigned int index = 0;
-		int c, colStart, colEnd, d2colStart, d2colEnd, conflictIndex, temp;
+		unsigned int count = 0;
+		int c, vid, temp;
 		int i, j, k;
-#pragma omp parallel for private(j, k, c, colStart, colEnd, d2colStart, d2colEnd, conflictIndex, temp)
+#pragma omp parallel for private(j, k, c, vid, temp)
 		for (i = 0; i < n_vertex; i++)
 		{
-			c = colors[i];
-			colStart = row[i];
-			colEnd = row[i + 1];
-			for (j = colStart; j < colEnd; j++)
+			c = colormap[i];
+			for (j = row[i]; j < row[i + 1]; j++)
 			{
-				if (colors[col[j]] == c)
+				if (colormap[col[j]] == c)
 				{
-					conflictIndex = i < col[j] ? i : col[j];
-					if (!isDetected[conflictIndex])
+					vid = i < col[j] ? i : col[j];
+					if (!heatmap[vid])
 					{
-						isDetected[conflictIndex] = true;
+						heatmap[vid] = true;
 #pragma omp atomic capture
-						temp = index++;
-						out[temp] = conflictIndex;
+						temp = count++;
+						conflict_vid[temp] = vid;
 					}
 				}
 
-				d2colStart = row[col[j]];
-				d2colEnd = row[col[j] + 1];
-				for (k = d2colStart; k < d2colEnd; ++k)
+				for (k = row[col[j]]; k < row[col[j] + 1]; ++k)
 				{
-					if (colors[col[k]] == c && col[k] != i)
+					if (colormap[col[k]] == c && col[k] != i)
 					{
-						conflictIndex = i < col[k] ? i : col[k];
-						if (!isDetected[conflictIndex])
+						vid = i < col[k] ? i : col[k];
+						if (!heatmap[vid])
 						{
-							isDetected[conflictIndex] = true;
+							heatmap[vid] = true;
 #pragma omp atomic capture
-							temp = index++;
-							out[temp] = conflictIndex;
+							temp = count++;
+							conflict_vid[temp] = vid;
 						}
 					}
 				}
 			}
 		}
 
-		// reset isDetected array
 #pragma omp parallel for
-		for (edge_t e = 0; e < index; e++)
-			isDetected[out[e]] = false;
+		for (edge_t e = 0; e < count; e++)
+			heatmap[conflict_vid[e]] = false;
 
-		return index;
+		return count;
 	}
 
 	/**
@@ -128,10 +119,10 @@ namespace D2Coloring
 	 * @param row: row pointer
 	 * @param col: column pointer
 	 * @param n_vertex: number of vertices
-	 * @param colors: color array shaped (n_vertex, )
+	 * @param colormap: color array shaped (n_vertex, )
 	 * @param color_used: array to track used colors
 	 */
-	int firstfit(int vid, edge_t *row, vertex_t *col, vertex_t n_vertex, int colors[], bool color_used[])
+	int firstfit(int vid, edge_t *row, vertex_t *col, vertex_t n_vertex, int colormap[], bool color_used[])
 	{
 		int row_l = row[vid];
 		int row_r = row[vid + 1];
@@ -139,14 +130,13 @@ namespace D2Coloring
 		// track whether a color is used it not
 		for (int i = row_l; i < row_r; i++)
 		{
-			int c = colors[col[i]];
+			int c = colormap[col[i]];
 			if (c >= 0)
 				color_used[c] = true;
 
-			int d2colStart = row[col[i]], d2colEnd = row[col[i] + 1];
-			for (int j = d2colStart; j < d2colEnd; j++)
+			for (int j = row[col[i]]; j < row[col[i] + 1]; j++)
 			{
-				c = colors[col[j]];
+				c = colormap[col[j]];
 				if (c >= 0 && col[j] != vid)
 					color_used[c] = true;
 			}
@@ -157,16 +147,16 @@ namespace D2Coloring
 		{
 			if (color_used[c])
 				continue;
-			
+
 			for (int i = row_l; i < row_r; i++)
 			{
-				int c = colors[col[i]];
+				int c = colormap[col[i]];
 				if (c >= 0)
 					color_used[c] = false;
 
 				for (edge_t j = row[col[i]]; j < row[col[i] + 1]; j++)
 				{
-					c = colors[col[j]];
+					c = colormap[col[j]];
 					if (c >= 0 && col[j] != vid)
 						color_used[c] = false;
 				}
@@ -179,13 +169,13 @@ namespace D2Coloring
 
 	/**
 	 * @brief Color the graph sequentially
-	 * 
+	 *
 	 * @param row: row pointer
 	 * @param col: column pointer
 	 * @param n_vertex: number of vertices
-	 * @param colors: color array shaped (n_vertex, )
-	*/
-	report color_graph_seq(edge_t *row, vertex_t *col, vertex_t n_vertex, int colors[])
+	 * @param colormap: color array shaped (n_vertex, )
+	 */
+	report color_graph_seq(edge_t *row, vertex_t *col, vertex_t n_vertex, int colormap[])
 	{
 		report result;
 		double t_start, t_end;
@@ -195,8 +185,8 @@ namespace D2Coloring
 		t_start = omp_get_wtime();
 		for (int i = 0; i < n_vertex; i++)
 		{
-			int c = firstfit(i, row, col, n_vertex, colors, color_used);
-			colors[i] = c;
+			int c = firstfit(i, row, col, n_vertex, colormap, color_used);
+			colormap[i] = c;
 			if (c > n_color)
 				n_color = c;
 		}
@@ -210,7 +200,7 @@ namespace D2Coloring
 		return result;
 	}
 
-	report color_graph_par(edge_t *row, vertex_t *col, vertex_t n_vertex, int colors[])
+	report color_graph_par(edge_t *row, vertex_t *col, vertex_t n_vertex, int colormap[])
 	{
 		report result;
 		double t_start, t_end;
@@ -233,20 +223,20 @@ namespace D2Coloring
 #pragma omp parallel for private(c)
 		for (i = 0; i < n_vertex; i++)
 		{
-			c = firstfit(i, row, col, n_vertex, colors, color_used);
-			colors[i] = c;
+			c = firstfit(i, row, col, n_vertex, colormap, color_used);
+			colormap[i] = c;
 		}
 
 		int n_conflict = 0;
 		do
 		{
 			// detect conflicted vertices and recolor
-			n_conflict = detect_conflicts(row, col, n_vertex, colors, isVertexDetected, conflictedVertices);
+			n_conflict = detect_conflicts(row, col, n_vertex, colormap, isVertexDetected, conflictedVertices);
 #pragma omp for private(c)
 			for (i = 0; i < n_conflict; i++)
 			{
-				c = firstfit(conflictedVertices[i], row, col, n_vertex, colors, color_used);
-				colors[conflictedVertices[i]] = c;
+				c = firstfit(conflictedVertices[i], row, col, n_vertex, colormap, color_used);
+				colormap[conflictedVertices[i]] = c;
 			}
 			++n_merge_conflict;
 		} while (n_conflict > 0);
@@ -259,7 +249,7 @@ namespace D2Coloring
 		{
 			delete[] color_used;
 		}
-		result.n_color = max(n_vertex, colors);
+		result.n_color = max(n_vertex, colormap);
 		result.t_exec = t_end - t_start;
 		result.n_conflict = n_merge_conflict;
 		return result;
@@ -277,7 +267,7 @@ int main(int argc, char *argv[])
 		cout << "Usage: ./coloring [FILE] [THREADS]" << endl;
 		exit(EXIT_FAILURE);
 	}
-	
+
 	int max_threads = 16;
 	if (argc == 3)
 	{
@@ -299,23 +289,23 @@ int main(int argc, char *argv[])
 	// Performance analysis
 	report r;
 
-	int *colors = new int[n_vertex];
-	fill_n(colors, n_vertex, -1);
+	int *colormap = new int[n_vertex];
+	fill_n(colormap, n_vertex, -1);
 
 	print_header();
 
 	// Sequential versions
-	r = D2Coloring::color_graph_seq(row_ptr, col_ind, n_vertex, colors);
+	r = D2Coloring::color_graph_seq(row_ptr, col_ind, n_vertex, colormap);
 
 	int conflicts;
 
 	// these two are used in the detect_conflicts, for correctness we only need to check conflict count.
-	bool *isDetected = new bool[n_vertex]();
-	int *out = new int[n_vertex]();
+	bool *heatmap = new bool[n_vertex]();
+	int *conflict_vid = new int[n_vertex]();
 
 	omp_set_num_threads(1);
-	conflicts = D2Coloring::detect_conflicts(row_ptr, col_ind, n_vertex, colors, isDetected, out);
-	fill_n(isDetected, n_vertex, false);
+	conflicts = D2Coloring::detect_conflicts(row_ptr, col_ind, n_vertex, colormap, heatmap, conflict_vid);
+	fill_n(heatmap, n_vertex, false);
 
 	print_report(1, r, "Sequential", conflicts);
 
@@ -323,14 +313,14 @@ int main(int argc, char *argv[])
 	int threads = 1;
 	while (threads <= max_threads)
 	{
-		fill_n(colors, n_vertex, -1); // reinitialize
+		fill_n(colormap, n_vertex, -1); // reinitialize
 		omp_set_num_threads(threads);
 
-		r = D2Coloring::color_graph_par(row_ptr, col_ind, n_vertex, colors);
+		r = D2Coloring::color_graph_par(row_ptr, col_ind, n_vertex, colormap);
 
 		omp_set_num_threads(1);
-		conflicts = D2Coloring::detect_conflicts(row_ptr, col_ind, n_vertex, colors, isDetected, out);
-		fill_n(isDetected, n_vertex, false);
+		conflicts = D2Coloring::detect_conflicts(row_ptr, col_ind, n_vertex, colormap, heatmap, conflict_vid);
+		fill_n(heatmap, n_vertex, false);
 
 		print_report(threads, r, "Parallel", conflicts);
 

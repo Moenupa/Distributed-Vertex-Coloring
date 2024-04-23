@@ -32,7 +32,6 @@
 *.app
 
 data
-bin
-build/
+coloring
 log/
 res
