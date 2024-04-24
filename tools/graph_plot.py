@@ -49,12 +49,12 @@ def visualize(mat: np.ndarray, do_coloring: bool = False) -> None:
     if do_coloring:
         colormap = firstfit(mat)
     else:
-        colormap = np.arange(n)
+        colormap = np.arange(1, n+1)
     colormark = 'c' if do_coloring else 'x'
 
     if n <= 300:
         plt.figure(figsize=(8, 6))
-        plt.title(f'V={n} C={colormap.max()} Graph')
+        plt.title(f'|V|={n} |C|={colormap.max()} Graph')
         nx.draw(G, node_color=colormap.tolist(),
                 with_labels=(n < 50), font_color='whitesmoke',
                 node_size=(300 if n < 50 else 100),
@@ -67,7 +67,7 @@ def visualize(mat: np.ndarray, do_coloring: bool = False) -> None:
 
     if n <= 1000:
         plt.figure(figsize=(8, 6))
-        plt.title(f'V={n} C={colormap.max()} Heatmap')
+        plt.title(f'|V|={n} |C|={colormap.max()} Heatmap')
         sns.heatmap(mat, xticklabels=False, yticklabels=False,
                     cmap=sns.light_palette("seagreen", as_cmap=True))
         plt.savefig(
