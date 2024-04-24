@@ -6,7 +6,7 @@ all: ./src/coloring.cpp
 
 .PHONY: all clean \
 		extract peek purge purgebin purgemtx purgeall \
-		bone010 nlpkkt120 nlpkkt240
+		nlpkkt80 nlpkkt120 nlpkkt240
 
 extract:
 	tar -xzvf ./data/*.tar.gz -C ./data/
@@ -22,9 +22,9 @@ purgemtx:
 	-@rm -vf ./data/*/*.mtx
 purgeall: purge purgemtx purgebin
 
-bone010:
+nlpkkt80:
 	mkdir -p data
-	wget -P ./data/ https://sparse.tamu.edu/MM/Oberwolfach/bone010.tar.gz
+	wget -P ./data/ https://sparse.tamu.edu/MM/Schenk/nlpkkt80.tar.gz
 nlpkkt120:
 	mkdir -p data 
 	wget -P ./data/ https://sparse.tamu.edu/MM/Schenk/nlpkkt120.tar.gz
